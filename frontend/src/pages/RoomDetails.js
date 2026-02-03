@@ -2,7 +2,6 @@ import React, { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { getRoom } from "../services/roomService";
 import { createBooking } from "../services/bookingService";
-import axios from "axios";
 import { useAuth } from "../context/AuthContext";
 import { toast } from "react-toastify";
 import GoogleMapComponent from "../components/GoogleMapComponent";
@@ -14,21 +13,14 @@ const RoomDetails = () => {
   const [room, setRoom] = useState(null);
   const [loading, setLoading] = useState(true);
   const [selectedImage, setSelectedImage] = useState(0);
-  const [showReviewForm, setShowReviewForm] = useState(false);
-  const [canReview, setCanReview] = useState(false);
   const [bookingForm, setBookingForm] = useState({
     dateDebut: "",
     dateFin: "",
     nombrePersonnes: 1,
   });
-  const [reviewForm, setReviewForm] = useState({
-    note: 5,
-    commentaire: "",
-  });
 
   useEffect(() => {
     fetchRoom();
-    checkIfCanReview();
   }, [id]);
 
   const fetchRoom = async () => {
@@ -40,24 +32,6 @@ const RoomDetails = () => {
       navigate("/");
     } finally {
       setLoading(false);
-    }
-  };
-
-  const checkIfCanReview = async () => {
-    if (!isAuthenticated || user?.role !== "client") return;
-
-    try {
-      const res = await axios.get("/api/bookings/my-bookings");
-      const bookings = res.data.data;
-
-      // Vérifier si l'utilisateur a une réservation terminée pour cette salle
-      const hasTerminatedBooking = bookings.some(
-        (booking) => booking.salle._id === id && booking.statut === "terminee",
-      );
-
-      setCanReview(hasTerminatedBooking);
-    } catch (error) {
-      console.error("Erreur lors de la vérification", error);
     }
   };
 
@@ -103,53 +77,14 @@ const RoomDetails = () => {
     }
   };
 
-  const handleReviewSubmit = async (e) => {
-    e.preventDefault();
-
-    try {
-      // Trouver la réservation terminée pour cette salle
-      const res = await axios.get("/api/bookings/my-bookings");
-      const terminatedBooking = res.data.data.find(
-        (booking) => booking.salle._id === id && booking.statut === "terminee",
-      );
-
-      if (!terminatedBooking) {
-        toast.error(
-          "Vous devez avoir une réservation terminée pour laisser un avis",
-        );
-        return;
-      }
-
-      await axios.post("/api/reviews", {
-        salle: id,
-        reservation: terminatedBooking._id,
-        note: parseInt(reviewForm.note),
-        commentaire: reviewForm.commentaire,
-      });
-
-      toast.success("Avis publié avec succès !");
-      setShowReviewForm(false);
-      setReviewForm({ note: 5, commentaire: "" });
-      fetchRoom();
-      setCanReview(false);
-    } catch (error) {
-      toast.error(
-        error.response?.data?.message ||
-          "Erreur lors de la publication de l'avis",
-      );
-    }
-  };
-
-  const renderStars = (rating, interactive = false, onRate = null) => {
+  const renderStars = (rating) => {
     return [...Array(5)].map((_, index) => (
       <span
         key={index}
         style={{
           color: index < rating ? "#f59e0b" : "#e5e7eb",
-          fontSize: interactive ? "2rem" : "1.2rem",
-          cursor: interactive ? "pointer" : "default",
+          fontSize: "1.2rem",
         }}
-        onClick={() => interactive && onRate && onRate(index + 1)}
       >
         ★
       </span>
@@ -176,7 +111,6 @@ const RoomDetails = () => {
     return null;
   };
 
-  // Obtenir la date/heure minimale (maintenant)
   const getMinDateTime = () => {
     const now = new Date();
     now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
@@ -341,93 +275,99 @@ const RoomDetails = () => {
                 alignItems: "center",
               }}
             >
-              <h3>⭐ Avis des clients ({room.avis?.length || 0})</h3>
-              {canReview && (
-                <button
-                  onClick={() => setShowReviewForm(!showReviewForm)}
-                  className="btn btn-primary"
-                >
-                  {showReviewForm ? "Annuler" : "✍️ Laisser un avis"}
-                </button>
-              )}
-            </div>
-
-            {showReviewForm && (
-              <form
-                onSubmit={handleReviewSubmit}
-                className="mt-3"
-                style={{
-                  background: "var(--light)",
-                  padding: "20px",
-                  borderRadius: "8px",
-                }}
-              >
-                <div className="form-group">
-                  <label className="form-label">Note *</label>
-                  <div>
-                    {renderStars(reviewForm.note, true, (rating) =>
-                      setReviewForm({ ...reviewForm, note: rating }),
-                    )}
-                  </div>
-                </div>
-
-                <div className="form-group">
-                  <label className="form-label">Commentaire *</label>
-                  <textarea
-                    className="form-control"
-                    value={reviewForm.commentaire}
-                    onChange={(e) =>
-                      setReviewForm({
-                        ...reviewForm,
-                        commentaire: e.target.value,
-                      })
-                    }
-                    required
-                    rows="4"
-                    placeholder="Partagez votre expérience..."
-                  />
-                </div>
-
-                <button type="submit" className="btn btn-primary">
-                  Publier l'avis
-                </button>
-              </form>
-            )}
-
-            {room.avis && room.avis.length > 0 ? (
-              room.avis.map((avis) => (
-                <div
-                  key={avis._id}
-                  style={{
-                    padding: "15px",
-                    background: "var(--light)",
-                    borderRadius: "8px",
-                    marginTop: "15px",
-                  }}
-                >
+              <div>
+                <h3>⭐ Avis des clients</h3>
+                {room.nombreAvis > 0 && (
                   <div
                     style={{
                       display: "flex",
-                      justifyContent: "space-between",
                       alignItems: "center",
+                      marginTop: "10px",
                     }}
                   >
-                    <strong>
-                      {avis.client.prenom} {avis.client.nom}
-                    </strong>
-                    <div>{renderStars(avis.note)}</div>
+                    <div style={{ fontSize: "1.5rem" }}>
+                      {renderStars(Math.round(room.noteMoyenne))}
+                    </div>
+                    <span
+                      style={{
+                        marginLeft: "10px",
+                        fontSize: "1.2rem",
+                        fontWeight: "bold",
+                        color: "var(--primary)",
+                      }}
+                    >
+                      {room.noteMoyenne.toFixed(1)}/5
+                    </span>
+                    <span style={{ marginLeft: "10px", color: "var(--gray)" }}>
+                      ({room.nombreAvis} avis)
+                    </span>
                   </div>
-                  <p style={{ marginTop: "10px", color: "var(--gray)" }}>
-                    {avis.commentaire}
-                  </p>
-                  <small style={{ color: "var(--gray)" }}>
-                    {new Date(avis.dateCreation).toLocaleDateString("fr-FR")}
-                  </small>
-                </div>
-              ))
+                )}
+              </div>
+            </div>
+
+            {room.avis && room.avis.length > 0 ? (
+              <div style={{ marginTop: "20px" }}>
+                {room.avis.map((avis) => (
+                  <div
+                    key={avis._id}
+                    style={{
+                      padding: "20px",
+                      background: "var(--light)",
+                      borderRadius: "8px",
+                      marginTop: "15px",
+                      border: "1px solid var(--border)",
+                    }}
+                  >
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "start",
+                      }}
+                    >
+                      <div>
+                        <strong style={{ fontSize: "1.1rem" }}>
+                          {avis.client.prenom} {avis.client.nom}
+                        </strong>
+                        <div style={{ marginTop: "5px" }}>
+                          {renderStars(avis.note)}
+                        </div>
+                      </div>
+                      <small style={{ color: "var(--gray)" }}>
+                        {new Date(avis.dateCreation).toLocaleDateString(
+                          "fr-FR",
+                          {
+                            year: "numeric",
+                            month: "long",
+                            day: "numeric",
+                          },
+                        )}
+                      </small>
+                    </div>
+                    <p
+                      style={{
+                        marginTop: "15px",
+                        color: "var(--dark)",
+                        lineHeight: "1.6",
+                      }}
+                    >
+                      {avis.commentaire}
+                    </p>
+                  </div>
+                ))}
+              </div>
             ) : (
-              <p className="mt-3" style={{ color: "var(--gray)" }}>
-                Aucun avis pour le moment
+              <p
+                className="mt-3"
+                style={{
+                  color: "var(--gray)",
+                  textAlign: "center",
+                  padding: "20px",
+                }}
+              >
+                Aucun avis pour le moment. Soyez le premier à donner votre avis
+                !
               </p>
             )}
           </div>

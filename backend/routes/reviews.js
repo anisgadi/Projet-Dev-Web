@@ -2,8 +2,6 @@ const express = require("express");
 const {
   createReview,
   getRoomReviews,
-  getReviews,
-  getReview,
   updateReview,
   deleteReview,
   getOwnerRoomReviews,
@@ -12,21 +10,17 @@ const { protect, authorize } = require("../middleware/auth");
 
 const router = express.Router();
 
-router
-  .route("/")
-  .post(protect, authorize("client", "admin"), createReview)
-  .get(protect, authorize("admin"), getReviews);
+router.route("/").post(protect, authorize("client"), createReview);
 
 router.route("/room/:roomId").get(getRoomReviews);
 
 router
-  .route("/owner/reviews")
+  .route("/owner/me")
   .get(protect, authorize("proprietaire", "admin"), getOwnerRoomReviews);
 
 router
   .route("/:id")
-  .get(getReview)
-  .put(protect, updateReview)
-  .delete(protect, deleteReview);
+  .put(protect, authorize("client", "admin"), updateReview)
+  .delete(protect, authorize("client", "admin"), deleteReview);
 
 module.exports = router;

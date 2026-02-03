@@ -9,8 +9,9 @@ exports.createReview = async (req, res, next) => {
   try {
     const { salle, reservation, note, commentaire } = req.body;
 
-    // Vérifier que la réservation existe et appartient au client
-    const booking = await Booking.findById(reservation);
+    // Vérifier que la réservation existe
+    const booking = await Booking.findById(reservation).populate("salle");
+
     if (!booking) {
       return res.status(404).json({
         success: false,
@@ -18,24 +19,41 @@ exports.createReview = async (req, res, next) => {
       });
     }
 
+    // Vérifier que c'est bien le client qui a fait la réservation
     if (booking.client.toString() !== req.user.id) {
       return res.status(403).json({
         success: false,
-        message: "Vous ne pouvez pas laisser un avis pour cette réservation",
+        message:
+          "Vous ne pouvez laisser un avis que pour vos propres réservations",
       });
     }
 
-    // Vérifier que la réservation est terminée
-    if (booking.statut !== "terminee") {
+    // Vérifier que la réservation est terminée (date de fin passée)
+    const now = new Date();
+    const dateFin = new Date(booking.dateFin);
+
+    if (dateFin > now) {
       return res.status(400).json({
         success: false,
         message:
-          "Vous ne pouvez laisser un avis que pour une réservation terminée",
+          "Vous ne pouvez laisser un avis qu'après la fin de votre réservation",
+      });
+    }
+
+    // Vérifier que la salle correspond à la réservation
+    if (booking.salle._id.toString() !== salle) {
+      return res.status(400).json({
+        success: false,
+        message: "La salle ne correspond pas à la réservation",
       });
     }
 
     // Vérifier qu'un avis n'existe pas déjà pour cette réservation
-    const existingReview = await Review.findOne({ reservation });
+    const existingReview = await Review.findOne({
+      reservation: reservation,
+      client: req.user.id,
+    });
+
     if (existingReview) {
       return res.status(400).json({
         success: false,
@@ -52,17 +70,26 @@ exports.createReview = async (req, res, next) => {
       commentaire,
     });
 
+    // Populate pour renvoyer les détails
+    await review.populate("client", "nom prenom");
+
     res.status(201).json({
       success: true,
       message: "Avis créé avec succès",
       data: review,
     });
   } catch (error) {
+    if (error.code === 11000) {
+      return res.status(400).json({
+        success: false,
+        message: "Vous avez déjà laissé un avis pour cette réservation",
+      });
+    }
     next(error);
   }
 };
 
-// @desc    Obtenir tous les avis d'une salle
+// @desc    Obtenir les avis d'une salle
 // @route   GET /api/reviews/room/:roomId
 // @access  Public
 exports.getRoomReviews = async (req, res, next) => {
@@ -81,54 +108,9 @@ exports.getRoomReviews = async (req, res, next) => {
   }
 };
 
-// @desc    Obtenir tous les avis (Admin)
-// @route   GET /api/reviews
-// @access  Private (Admin)
-exports.getReviews = async (req, res, next) => {
-  try {
-    const reviews = await Review.find()
-      .populate("salle", "titre")
-      .populate("client", "nom prenom email")
-      .sort("-dateCreation");
-
-    res.status(200).json({
-      success: true,
-      count: reviews.length,
-      data: reviews,
-    });
-  } catch (error) {
-    next(error);
-  }
-};
-
-// @desc    Obtenir un avis par ID
-// @route   GET /api/reviews/:id
-// @access  Public
-exports.getReview = async (req, res, next) => {
-  try {
-    const review = await Review.findById(req.params.id)
-      .populate("salle", "titre")
-      .populate("client", "nom prenom");
-
-    if (!review) {
-      return res.status(404).json({
-        success: false,
-        message: "Avis non trouvé",
-      });
-    }
-
-    res.status(200).json({
-      success: true,
-      data: review,
-    });
-  } catch (error) {
-    next(error);
-  }
-};
-
 // @desc    Mettre à jour un avis
 // @route   PUT /api/reviews/:id
-// @access  Private (Client propriétaire de l'avis)
+// @access  Private (Client)
 exports.updateReview = async (req, res, next) => {
   try {
     let review = await Review.findById(req.params.id);
@@ -140,7 +122,7 @@ exports.updateReview = async (req, res, next) => {
       });
     }
 
-    // Vérifier que l'utilisateur est le propriétaire de l'avis
+    // Vérifier que c'est bien le client qui a créé l'avis
     if (review.client.toString() !== req.user.id && req.user.role !== "admin") {
       return res.status(403).json({
         success: false,
@@ -152,7 +134,10 @@ exports.updateReview = async (req, res, next) => {
       req.params.id,
       { note: req.body.note, commentaire: req.body.commentaire },
       { new: true, runValidators: true },
-    );
+    ).populate("client", "nom prenom");
+
+    // Recalculer la note moyenne
+    await Review.calculerNoteMoyenne(review.salle);
 
     res.status(200).json({
       success: true,
@@ -166,7 +151,7 @@ exports.updateReview = async (req, res, next) => {
 
 // @desc    Supprimer un avis
 // @route   DELETE /api/reviews/:id
-// @access  Private (Client propriétaire ou Admin)
+// @access  Private (Client/Admin)
 exports.deleteReview = async (req, res, next) => {
   try {
     const review = await Review.findById(req.params.id);
@@ -178,7 +163,7 @@ exports.deleteReview = async (req, res, next) => {
       });
     }
 
-    // Vérifier que l'utilisateur est le propriétaire de l'avis ou admin
+    // Vérifier que c'est bien le client qui a créé l'avis ou un admin
     if (review.client.toString() !== req.user.id && req.user.role !== "admin") {
       return res.status(403).json({
         success: false,
@@ -186,7 +171,11 @@ exports.deleteReview = async (req, res, next) => {
       });
     }
 
+    const salleId = review.salle;
     await review.deleteOne();
+
+    // Recalculer la note moyenne
+    await Review.calculerNoteMoyenne(salleId);
 
     res.status(200).json({
       success: true,
@@ -198,19 +187,17 @@ exports.deleteReview = async (req, res, next) => {
   }
 };
 
-// @desc    Obtenir les avis des salles d'un propriétaire
-// @route   GET /api/reviews/owner/reviews
+// @desc    Obtenir les avis d'un propriétaire (pour ses salles)
+// @route   GET /api/reviews/owner/me
 // @access  Private (Propriétaire)
 exports.getOwnerRoomReviews = async (req, res, next) => {
   try {
-    // Trouver toutes les salles du propriétaire
     const rooms = await Room.find({ proprietaire: req.user.id });
     const roomIds = rooms.map((room) => room._id);
 
-    // Trouver tous les avis pour ces salles
     const reviews = await Review.find({ salle: { $in: roomIds } })
-      .populate("salle", "titre")
       .populate("client", "nom prenom")
+      .populate("salle", "titre")
       .sort("-dateCreation");
 
     res.status(200).json({

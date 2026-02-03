@@ -11,6 +11,7 @@ const BookingDetails = () => {
   const [loading, setLoading] = useState(true);
   const [showReviewForm, setShowReviewForm] = useState(false);
   const [hasReviewed, setHasReviewed] = useState(false);
+  const [userReview, setUserReview] = useState(null);
   const [reviewForm, setReviewForm] = useState({
     note: 5,
     commentaire: "",
@@ -27,10 +28,14 @@ const BookingDetails = () => {
 
       // Vérifier si l'utilisateur a déjà laissé un avis
       if (res.data.data.salle && res.data.data.salle.avis) {
-        const userReview = res.data.data.salle.avis.find(
-          (avis) => avis.reservation === id,
+        const existingReview = res.data.data.salle.avis.find(
+          (avis) => avis.reservation && avis.reservation.toString() === id,
         );
-        setHasReviewed(!!userReview);
+
+        if (existingReview) {
+          setHasReviewed(true);
+          setUserReview(existingReview);
+        }
       }
     } catch (error) {
       toast.error("Erreur lors du chargement de la réservation");
@@ -41,6 +46,7 @@ const BookingDetails = () => {
   };
 
   const isBookingFinished = () => {
+    if (!booking) return false;
     return new Date(booking.dateFin) < new Date();
   };
 
@@ -67,10 +73,26 @@ const BookingDetails = () => {
       setHasReviewed(true);
       fetchBooking();
     } catch (error) {
-      toast.error(
+      const errorMsg =
         error.response?.data?.message ||
-          "Erreur lors de la publication de l'avis",
-      );
+        "Erreur lors de la publication de l'avis";
+      toast.error(errorMsg);
+    }
+  };
+
+  const handleDeleteReview = async () => {
+    if (!window.confirm("Êtes-vous sûr de vouloir supprimer votre avis ?")) {
+      return;
+    }
+
+    try {
+      await axios.delete(`/api/reviews/${userReview._id}`);
+      toast.success("Avis supprimé avec succès");
+      setHasReviewed(false);
+      setUserReview(null);
+      fetchBooking();
+    } catch (error) {
+      toast.error("Erreur lors de la suppression de l'avis");
     }
   };
 
@@ -80,8 +102,9 @@ const BookingDetails = () => {
         key={index}
         style={{
           color: index < rating ? "#f59e0b" : "#e5e7eb",
-          fontSize: interactive ? "2rem" : "1.2rem",
+          fontSize: interactive ? "2.5rem" : "1.2rem",
           cursor: interactive ? "pointer" : "default",
+          marginRight: "5px",
         }}
         onClick={() => interactive && onRate && onRate(index + 1)}
       >
@@ -253,7 +276,8 @@ const BookingDetails = () => {
               </span>
               {booking.salle.noteMoyenne > 0 && (
                 <span className="badge badge-warning">
-                  ⭐ {booking.salle.noteMoyenne.toFixed(1)}/5
+                  ⭐ {booking.salle.noteMoyenne.toFixed(1)}/5 (
+                  {booking.salle.nombreAvis} avis)
                 </span>
               )}
             </div>
@@ -356,18 +380,63 @@ const BookingDetails = () => {
             <div className="card mt-3">
               <h3>⭐ Votre avis</h3>
 
-              {hasReviewed ? (
-                <div className="alert alert-success mt-2">
-                  ✓ Vous avez déjà laissé un avis pour cette réservation
+              {hasReviewed && userReview ? (
+                <div
+                  style={{
+                    background: "var(--light)",
+                    padding: "20px",
+                    borderRadius: "8px",
+                    marginTop: "15px",
+                  }}
+                >
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                    }}
+                  >
+                    <h4>Votre évaluation</h4>
+                    <button
+                      onClick={handleDeleteReview}
+                      className="btn btn-danger"
+                      style={{ padding: "5px 10px", fontSize: "0.85rem" }}
+                    >
+                      🗑️ Supprimer
+                    </button>
+                  </div>
+                  <div style={{ marginTop: "10px" }}>
+                    {renderStars(userReview.note)}
+                  </div>
+                  <p style={{ marginTop: "10px", color: "var(--dark)" }}>
+                    {userReview.commentaire}
+                  </p>
+                  <small style={{ color: "var(--gray)" }}>
+                    Publié le{" "}
+                    {new Date(userReview.dateCreation).toLocaleDateString(
+                      "fr-FR",
+                    )}
+                  </small>
                 </div>
               ) : showReviewForm ? (
                 <form onSubmit={handleReviewSubmit} className="mt-3">
                   <div className="form-group">
-                    <label className="form-label">Note *</label>
+                    <label className="form-label">
+                      Note * (cliquez sur les étoiles)
+                    </label>
                     <div>
                       {renderStars(reviewForm.note, true, (rating) =>
                         setReviewForm({ ...reviewForm, note: rating }),
                       )}
+                      <span
+                        style={{
+                          marginLeft: "10px",
+                          fontSize: "1.2rem",
+                          color: "var(--primary)",
+                        }}
+                      >
+                        {reviewForm.note}/5
+                      </span>
                     </div>
                   </div>
 
@@ -384,13 +453,17 @@ const BookingDetails = () => {
                       }
                       required
                       rows="4"
-                      placeholder="Partagez votre expérience..."
+                      maxLength="500"
+                      placeholder="Partagez votre expérience avec cette salle..."
                     />
+                    <small style={{ color: "var(--gray)" }}>
+                      {reviewForm.commentaire.length}/500 caractères
+                    </small>
                   </div>
 
                   <div className="grid grid-2">
                     <button type="submit" className="btn btn-primary">
-                      Publier l'avis
+                      ✅ Publier l'avis
                     </button>
                     <button
                       type="button"
@@ -402,14 +475,30 @@ const BookingDetails = () => {
                   </div>
                 </form>
               ) : (
-                <button
-                  onClick={() => setShowReviewForm(true)}
-                  className="btn btn-primary mt-2"
-                  style={{ width: "100%" }}
-                >
-                  ✍️ Donner mon avis
-                </button>
+                <div>
+                  <p style={{ color: "var(--gray)", marginTop: "10px" }}>
+                    Votre avis est important ! Partagez votre expérience pour
+                    aider les autres utilisateurs.
+                  </p>
+                  <button
+                    onClick={() => setShowReviewForm(true)}
+                    className="btn btn-primary mt-2"
+                    style={{ width: "100%" }}
+                  >
+                    ✍️ Donner mon avis
+                  </button>
+                </div>
               )}
+            </div>
+          )}
+
+          {!bookingFinished && (
+            <div className="card mt-3">
+              <h3>⭐ Avis</h3>
+              <div className="alert alert-info">
+                ℹ️ Vous pourrez laisser un avis après la fin de votre
+                réservation
+              </div>
             </div>
           )}
 

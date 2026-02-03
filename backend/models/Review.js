@@ -20,13 +20,13 @@ const reviewSchema = new mongoose.Schema(
     note: {
       type: Number,
       required: [true, "La note est requise"],
-      min: 1,
-      max: 5,
+      min: [1, "La note minimale est 1"],
+      max: [5, "La note maximale est 5"],
     },
     commentaire: {
       type: String,
       required: [true, "Le commentaire est requis"],
-      maxlength: 1000,
+      maxlength: [500, "Le commentaire ne peut pas dépasser 500 caractères"],
     },
     dateCreation: {
       type: Date,
@@ -38,11 +38,10 @@ const reviewSchema = new mongoose.Schema(
   },
 );
 
-// Un client ne peut laisser qu'un seul avis par réservation
-reviewSchema.index({ reservation: 1 }, { unique: true });
-reviewSchema.index({ salle: 1, dateCreation: -1 });
+// Index pour qu'un client ne puisse laisser qu'un seul avis par réservation
+reviewSchema.index({ reservation: 1, client: 1 }, { unique: true });
 
-// Mettre à jour la note moyenne de la salle après l'ajout d'un avis
+// Méthode statique pour calculer la note moyenne d'une salle
 reviewSchema.statics.calculerNoteMoyenne = async function (salleId) {
   const stats = await this.aggregate([
     {
@@ -69,17 +68,17 @@ reviewSchema.statics.calculerNoteMoyenne = async function (salleId) {
         nombreAvis: 0,
       });
     }
-  } catch (err) {
-    console.error(err);
+  } catch (error) {
+    console.error(error);
   }
 };
 
-// Calculer la note moyenne après la sauvegarde
+// Calculer la note moyenne après la création d'un avis
 reviewSchema.post("save", function () {
   this.constructor.calculerNoteMoyenne(this.salle);
 });
 
-// Calculer la note moyenne après la suppression
+// Calculer la note moyenne après la suppression d'un avis
 reviewSchema.post("remove", function () {
   this.constructor.calculerNoteMoyenne(this.salle);
 });
