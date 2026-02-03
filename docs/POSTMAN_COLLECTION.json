@@ -1,0 +1,610 @@
+{
+  "info": {
+    "name": "Room Booking Platform API",
+    "description": "Collection complète de l'API de réservation de salles",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "id": "base_url",
+      "value": "http://localhost:5000/api",
+      "type": "string"
+    },
+    {
+      "id": "token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "id": "room_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "id": "user_id",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Register Client",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nom\": \"Dupont\",\n  \"prenom\": \"Jean\",\n  \"email\": \"client@test.com\",\n  \"password\": \"password123\",\n  \"role\": \"client\",\n  \"telephone\": \"0612345678\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/auth/register",
+              "protocol": "http",
+              "host": ["localhost:5000"],
+              "path": ["api", "auth", "register"]
+            },
+            "description": "Inscription d'un nouveau client"
+          },
+          "response": []
+        },
+        {
+          "name": "Register Owner",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nom\": \"Martin\",\n  \"prenom\": \"Alice\",\n  \"email\": \"owner@test.com\",\n  \"password\": \"password123\",\n  \"role\": \"proprietaire\",\n  \"telephone\": \"0698765432\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/auth/register",
+              "protocol": "http",
+              "host": ["localhost:5000"],
+              "path": ["api", "auth", "register"]
+            },
+            "description": "Inscription d'un propriétaire de salle"
+          },
+          "response": []
+        },
+        {
+          "name": "Login",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"client@test.com\",\n  \"password\": \"password123\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/auth/login",
+              "protocol": "http",
+              "host": ["localhost:5000"],
+              "path": ["api", "auth", "login"]
+            },
+            "description": "Connexion d'un utilisateur",
+            "events": [
+              {
+                "listen": "test",
+                "script": {
+                  "type": "text/javascript",
+                  "exec": [
+                    "// Test de la réponse",
+                    "pm.test('Status code is 200', function() {",
+                    "  pm.response.to.have.status(200);",
+                    "});",
+                    "",
+                    "pm.test('Response has token', function() {",
+                    "  var jsonData = pm.response.json();",
+                    "  pm.expect(jsonData).to.have.property('token');",
+                    "  pm.expect(jsonData.token).to.be.a('string');",
+                    "});",
+                    "",
+                    "// Stocker le token dans les variables de collection",
+                    "if (pm.response.code === 200) {",
+                    "  const jsonData = pm.response.json();",
+                    "  pm.collectionVariables.set('token', jsonData.token);",
+                    "  pm.collectionVariables.set('user_id', jsonData.user._id || jsonData.user.id);",
+                    "  console.log('Token stored:', jsonData.token);",
+                    "}"
+                  ]
+                }
+              }
+            ]
+          },
+          "response": []
+        },
+        {
+          "name": "Get Me",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/auth/me",
+              "protocol": "http",
+              "host": ["localhost:5000"],
+              "path": ["api", "auth", "me"]
+            },
+            "description": "Récupérer les informations de l'utilisateur connecté",
+            "events": [
+              {
+                "listen": "test",
+                "script": {
+                  "type": "text/javascript",
+                  "exec": [
+                    "pm.test('Status code is 200', function() {",
+                    "  pm.response.to.have.status(200);",
+                    "});",
+                    "",
+                    "pm.test('Response has user data', function() {",
+                    "  var jsonData = pm.response.json();",
+                    "  pm.expect(jsonData).to.have.property('user');",
+                    "  pm.expect(jsonData.user).to.have.property('email');",
+                    "});"
+                  ]
+                }
+              }
+            ]
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Rooms",
+      "item": [
+        {
+          "name": "Get All Rooms",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/rooms",
+              "protocol": "http",
+              "host": ["localhost:5000"],
+              "path": ["api", "rooms"]
+            },
+            "description": "Récupérer toutes les salles disponibles",
+            "events": [
+              {
+                "listen": "test",
+                "script": {
+                  "type": "text/javascript",
+                  "exec": [
+                    "pm.test('Status code is 200', function() {",
+                    "  pm.response.to.have.status(200);",
+                    "});",
+                    "",
+                    "pm.test('Response is an array', function() {",
+                    "  var jsonData = pm.response.json();",
+                    "  pm.expect(jsonData).to.be.an('array');",
+                    "});"
+                  ]
+                }
+              }
+            ]
+          },
+          "response": []
+        },
+        {
+          "name": "Search Rooms Nearby",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/rooms?latitude=48.8566&longitude=2.3522&distance=10",
+              "protocol": "http",
+              "host": ["localhost:5000"],
+              "path": ["api", "rooms"],
+              "query": [
+                {
+                  "key": "latitude",
+                  "value": "48.8566"
+                },
+                {
+                  "key": "longitude",
+                  "value": "2.3522"
+                },
+                {
+                  "key": "distance",
+                  "value": "10"
+                }
+              ]
+            },
+            "description": "Rechercher des salles à proximité d'une localisation",
+            "events": [
+              {
+                "listen": "test",
+                "script": {
+                  "type": "text/javascript",
+                  "exec": [
+                    "pm.test('Status code is 200', function() {",
+                    "  pm.response.to.have.status(200);",
+                    "});"
+                  ]
+                }
+              }
+            ]
+          },
+          "response": []
+        },
+        {
+          "name": "Create Room",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"titre\": \"Salle de Réunion Moderne\",\n  \"description\": \"Belle salle équipée avec vue panoramique\",\n  \"capacite\": 20,\n  \"prix\": 50,\n  \"typePrix\": \"heure\",\n  \"localisation\": {\n    \"adresse\": \"123 Rue de Rivoli\",\n    \"ville\": \"Paris\",\n    \"codePostal\": \"75001\",\n    \"latitude\": 48.8566,\n    \"longitude\": 2.3522\n  },\n  \"equipements\": [\"WiFi\", \"Projecteur\", \"Tableau blanc\"],\n  \"images\": [\n    \"https://images.unsplash.com/photo-1497366216548-37526070297c\",\n    \"https://images.unsplash.com/photo-1497366811353-6870744d04b2\"\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/rooms",
+              "protocol": "http",
+              "host": ["localhost:5000"],
+              "path": ["api", "rooms"]
+            },
+            "description": "Créer une nouvelle salle (propriétaire uniquement)",
+            "events": [
+              {
+                "listen": "test",
+                "script": {
+                  "type": "text/javascript",
+                  "exec": [
+                    "pm.test('Status code is 201', function() {",
+                    "  pm.response.to.have.status(201);",
+                    "});",
+                    "",
+                    "pm.test('Response has room ID', function() {",
+                    "  var jsonData = pm.response.json();",
+                    "  pm.expect(jsonData).to.have.property('_id');",
+                    "  // Stocker l'ID de la salle créée",
+                    "  pm.collectionVariables.set('room_id', jsonData._id);",
+                    "});"
+                  ]
+                }
+              }
+            ]
+          },
+          "response": []
+        },
+        {
+          "name": "Get Pending Rooms (Admin)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/rooms/pending",
+              "protocol": "http",
+              "host": ["localhost:5000"],
+              "path": ["api", "rooms", "pending"]
+            },
+            "description": "Récupérer les salles en attente d'approbation (admin uniquement)",
+            "events": [
+              {
+                "listen": "test",
+                "script": {
+                  "type": "text/javascript",
+                  "exec": [
+                    "pm.test('Status code is 200', function() {",
+                    "  pm.response.to.have.status(200);",
+                    "});"
+                  ]
+                }
+              }
+            ]
+          },
+          "response": []
+        },
+        {
+          "name": "Approve Room (Admin)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/rooms/{{room_id}}/approve",
+              "protocol": "http",
+              "host": ["localhost:5000"],
+              "path": ["api", "rooms", "{{room_id}}", "approve"]
+            },
+            "description": "Approuver une salle (admin uniquement)",
+            "events": [
+              {
+                "listen": "test",
+                "script": {
+                  "type": "text/javascript",
+                  "exec": [
+                    "pm.test('Status code is 200', function() {",
+                    "  pm.response.to.have.status(200);",
+                    "});",
+                    "",
+                    "pm.test('Room is approved', function() {",
+                    "  var jsonData = pm.response.json();",
+                    "  pm.expect(jsonData).to.have.property('status');",
+                    "  pm.expect(jsonData.status).to.equal('approved');",
+                    "});"
+                  ]
+                }
+              }
+            ]
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Bookings",
+      "item": [
+        {
+          "name": "Create Booking",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"salle\": \"{{room_id}}\",\n  \"dateDebut\": \"2026-03-01T09:00:00\",\n  \"dateFin\": \"2026-03-01T17:00:00\",\n  \"nombrePersonnes\": 15\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/bookings",
+              "protocol": "http",
+              "host": ["localhost:5000"],
+              "path": ["api", "bookings"]
+            },
+            "description": "Créer une nouvelle réservation",
+            "events": [
+              {
+                "listen": "test",
+                "script": {
+                  "type": "text/javascript",
+                  "exec": [
+                    "pm.test('Status code is 201', function() {",
+                    "  pm.response.to.have.status(201);",
+                    "});",
+                    "",
+                    "pm.test('Response has booking data', function() {",
+                    "  var jsonData = pm.response.json();",
+                    "  pm.expect(jsonData).to.have.property('_id');",
+                    "  pm.expect(jsonData).to.have.property('salle');",
+                    "  pm.expect(jsonData.salle).to.equal(pm.collectionVariables.get('room_id'));",
+                    "});"
+                  ]
+                }
+              }
+            ]
+          },
+          "response": []
+        },
+        {
+          "name": "Get My Bookings",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/bookings/my-bookings",
+              "protocol": "http",
+              "host": ["localhost:5000"],
+              "path": ["api", "bookings", "my-bookings"]
+            },
+            "description": "Récupérer mes réservations",
+            "events": [
+              {
+                "listen": "test",
+                "script": {
+                  "type": "text/javascript",
+                  "exec": [
+                    "pm.test('Status code is 200', function() {",
+                    "  pm.response.to.have.status(200);",
+                    "});",
+                    "",
+                    "pm.test('Response is an array', function() {",
+                    "  var jsonData = pm.response.json();",
+                    "  pm.expect(jsonData).to.be.an('array');",
+                    "});"
+                  ]
+                }
+              }
+            ]
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Admin",
+      "item": [
+        {
+          "name": "Get All Users",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/admin/users",
+              "protocol": "http",
+              "host": ["localhost:5000"],
+              "path": ["api", "admin", "users"]
+            },
+            "description": "Récupérer tous les utilisateurs (admin uniquement)",
+            "events": [
+              {
+                "listen": "test",
+                "script": {
+                  "type": "text/javascript",
+                  "exec": [
+                    "pm.test('Status code is 200', function() {",
+                    "  pm.response.to.have.status(200);",
+                    "});",
+                    "",
+                    "pm.test('Response is an array', function() {",
+                    "  var jsonData = pm.response.json();",
+                    "  pm.expect(jsonData).to.be.an('array');",
+                    "});"
+                  ]
+                }
+              }
+            ]
+          },
+          "response": []
+        },
+        {
+          "name": "Ban/Unban User",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/admin/users/{{user_id}}/toggle",
+              "protocol": "http",
+              "host": ["localhost:5000"],
+              "path": ["api", "admin", "users", "{{user_id}}", "toggle"]
+            },
+            "description": "Bannir/débannir un utilisateur (admin uniquement)",
+            "events": [
+              {
+                "listen": "test",
+                "script": {
+                  "type": "text/javascript",
+                  "exec": [
+                    "pm.test('Status code is 200', function() {",
+                    "  pm.response.to.have.status(200);",
+                    "});",
+                    "",
+                    "pm.test('User status toggled', function() {",
+                    "  var jsonData = pm.response.json();",
+                    "  pm.expect(jsonData).to.have.property('isBanned');",
+                    "});"
+                  ]
+                }
+              }
+            ]
+          },
+          "response": []
+        },
+        {
+          "name": "Get Admin Stats",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/admin/stats/admin",
+              "protocol": "http",
+              "host": ["localhost:5000"],
+              "path": ["api", "admin", "stats", "admin"]
+            },
+            "description": "Récupérer les statistiques d'administration",
+            "events": [
+              {
+                "listen": "test",
+                "script": {
+                  "type": "text/javascript",
+                  "exec": [
+                    "pm.test('Status code is 200', function() {",
+                    "  pm.response.to.have.status(200);",
+                    "});",
+                    "",
+                    "pm.test('Response has stats', function() {",
+                    "  var jsonData = pm.response.json();",
+                    "  pm.expect(jsonData).to.have.property('totalUsers');",
+                    "  pm.expect(jsonData).to.have.property('totalRooms');",
+                    "  pm.expect(jsonData).to.have.property('totalBookings');",
+                    "});"
+                  ]
+                }
+              }
+            ]
+          },
+          "response": []
+        }
+      ]
+    }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// Script exécuté avant chaque requête",
+          "console.log('Executing request:', pm.request.method, pm.request.url);"
+        ]
+      }
+    },
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// Script exécuté après chaque requête",
+          "console.log('Response status:', pm.response.code);",
+          "console.log('Response time:', pm.response.responseTime, 'ms');"
+        ]
+      }
+    }
+  ],
+  "auth": null,
+  "protocolProfileBehavior": {}
+}
