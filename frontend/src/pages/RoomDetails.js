@@ -5,6 +5,7 @@ import { createBooking } from "../services/bookingService";
 import { useAuth } from "../context/AuthContext";
 import { toast } from "react-toastify";
 import GoogleMapComponent from "../components/GoogleMapComponent";
+import ImageLightbox from "../components/ImageLightbox";
 
 const RoomDetails = () => {
   const { id } = useParams();
@@ -13,6 +14,7 @@ const RoomDetails = () => {
   const [room, setRoom] = useState(null);
   const [loading, setLoading] = useState(true);
   const [selectedImage, setSelectedImage] = useState(0);
+  const [showLightbox, setShowLightbox] = useState(false);
   const [bookingForm, setBookingForm] = useState({
     dateDebut: "",
     dateFin: "",
@@ -49,7 +51,6 @@ const RoomDetails = () => {
       return;
     }
 
-    // Validation des dates
     const now = new Date();
     const debut = new Date(bookingForm.dateDebut);
     const fin = new Date(bookingForm.dateFin);
@@ -69,7 +70,9 @@ const RoomDetails = () => {
         salle: id,
         ...bookingForm,
       });
-      toast.success("Réservation effectuée avec succès !");
+      toast.success(
+        "Demande de réservation envoyée ! En attente d'approbation du propriétaire.",
+      );
       setBookingForm({ dateDebut: "", dateFin: "", nombrePersonnes: 1 });
       navigate("/my-bookings");
     } catch (error) {
@@ -117,6 +120,19 @@ const RoomDetails = () => {
     return now.toISOString().slice(0, 16);
   };
 
+  const handleImageClick = (index) => {
+    setSelectedImage(index);
+    setShowLightbox(true);
+  };
+
+  const handleNextImage = () => {
+    setSelectedImage((prev) => (prev + 1) % images.length);
+  };
+
+  const handlePrevImage = () => {
+    setSelectedImage((prev) => (prev - 1 + images.length) % images.length);
+  };
+
   if (loading)
     return (
       <div className="loading">
@@ -139,6 +155,16 @@ const RoomDetails = () => {
 
   return (
     <div className="container py-4">
+      {showLightbox && (
+        <ImageLightbox
+          images={images}
+          currentIndex={selectedImage}
+          onClose={() => setShowLightbox(false)}
+          onNext={handleNextImage}
+          onPrev={handlePrevImage}
+        />
+      )}
+
       <div className="grid grid-2">
         <div>
           {/* Galerie d'images */}
@@ -146,11 +172,13 @@ const RoomDetails = () => {
             <img
               src={images[selectedImage]}
               alt={room.titre}
+              onClick={() => handleImageClick(selectedImage)}
               style={{
                 width: "100%",
                 height: "400px",
                 objectFit: "cover",
                 borderRadius: "8px",
+                cursor: "zoom-in",
               }}
               onError={(e) => {
                 e.target.src =
@@ -452,8 +480,19 @@ const RoomDetails = () => {
                   className="btn btn-primary"
                   style={{ width: "100%" }}
                 >
-                  Réserver maintenant
+                  Envoyer une demande de réservation
                 </button>
+
+                <small
+                  style={{
+                    display: "block",
+                    marginTop: "10px",
+                    color: "var(--gray)",
+                    textAlign: "center",
+                  }}
+                >
+                  Le propriétaire devra approuver votre demande
+                </small>
               </form>
             )}
           </div>

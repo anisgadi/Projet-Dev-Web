@@ -11,12 +11,14 @@ import GoogleMapComponent from "../components/GoogleMapComponent";
 
 const OwnerDashboard = () => {
   const [rooms, setRooms] = useState([]);
+  const [bookings, setBookings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editingRoom, setEditingRoom] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [mapCenter, setMapCenter] = useState({ lat: 36.7167, lng: 4.05 });
   const [selectedLocation, setSelectedLocation] = useState(null);
+  const [selectedRoomBookings, setSelectedRoomBookings] = useState(null);
 
   const [formData, setFormData] = useState({
     titre: "",
@@ -35,6 +37,7 @@ const OwnerDashboard = () => {
 
   useEffect(() => {
     fetchRooms();
+    fetchBookings();
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition((position) => {
         setMapCenter({
@@ -53,6 +56,86 @@ const OwnerDashboard = () => {
       toast.error("Erreur lors du chargement des salles");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchBookings = async () => {
+    try {
+      const res = await axios.get("/api/bookings/owner-bookings");
+      setBookings(res.data.data);
+    } catch (error) {
+      console.error("Erreur lors du chargement des réservations");
+    }
+  };
+
+  const getPendingBookingsCount = (roomId) => {
+    return bookings.filter(
+      (booking) =>
+        booking.salle._id === roomId && booking.statut === "en_attente",
+    ).length;
+  };
+
+  const getRoomBookings = (roomId) => {
+    return bookings.filter((booking) => booking.salle._id === roomId);
+  };
+
+  const handleApproveBooking = async (bookingId) => {
+    try {
+      await axios.put(`/api/bookings/${bookingId}/approve`);
+      toast.success("Réservation approuvée");
+      fetchBookings();
+      if (selectedRoomBookings) {
+        setSelectedRoomBookings({
+          ...selectedRoomBookings,
+          bookings: getRoomBookings(selectedRoomBookings.roomId),
+        });
+      }
+    } catch (error) {
+      toast.error("Erreur lors de l'approbation");
+    }
+  };
+
+  const handleRefuseBooking = async (bookingId) => {
+    if (
+      window.confirm("Êtes-vous sûr de vouloir refuser cette réservation ?")
+    ) {
+      try {
+        await axios.put(`/api/bookings/${bookingId}/refuse`);
+        toast.success("Réservation refusée");
+        fetchBookings();
+        if (selectedRoomBookings) {
+          setSelectedRoomBookings({
+            ...selectedRoomBookings,
+            bookings: getRoomBookings(selectedRoomBookings.roomId),
+          });
+        }
+      } catch (error) {
+        toast.error("Erreur lors du refus");
+      }
+    }
+  };
+
+  const handleLocationSelect = async (location) => {
+    setSelectedLocation(location);
+
+    // Géocodage inversé pour obtenir l'adresse
+    try {
+      const res = await axios.get(
+        `/api/geocoding/reverse?lat=${location.lat}&lng=${location.lng}`,
+      );
+      if (res.data.success) {
+        setFormData((prev) => ({
+          ...prev,
+          localisation: {
+            adresse: res.data.data.adresseComplete,
+            ville: res.data.data.ville,
+            codePostal: res.data.data.codePostal,
+          },
+        }));
+        toast.success(`Adresse trouvée: ${res.data.data.adresseComplete}`);
+      }
+    } catch (error) {
+      toast.error("Impossible de récupérer l'adresse");
     }
   };
 
@@ -218,6 +301,37 @@ const OwnerDashboard = () => {
     return <span className="badge badge-warning">⏳ En attente</span>;
   };
 
+  const formatDate = (dateString) => {
+    const date = new Date(dateString);
+    return date.toLocaleDateString("fr-FR", {
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  };
+
+  const getBookingStatusBadge = (status) => {
+    const badges = {
+      confirmee: "badge-success",
+      en_attente: "badge-warning",
+      annulee: "badge-danger",
+      refusee: "badge-danger",
+    };
+    return badges[status] || "badge-primary";
+  };
+
+  const getBookingStatusText = (status) => {
+    const texts = {
+      confirmee: "Confirmée",
+      en_attente: "En attente",
+      annulee: "Annulée",
+      refusee: "Refusée",
+    };
+    return texts[status] || status;
+  };
+
   if (loading)
     return (
       <div className="loading">
@@ -320,89 +434,41 @@ const OwnerDashboard = () => {
             </div>
 
             <h3 className="mt-4">📍 Localisation</h3>
-            <div className="grid grid-3">
-              <div className="form-group">
-                <label className="form-label">Adresse *</label>
-                <input
-                  type="text"
-                  className="form-control"
-                  value={formData.localisation.adresse}
-                  onChange={(e) =>
-                    setFormData({
-                      ...formData,
-                      localisation: {
-                        ...formData.localisation,
-                        adresse: e.target.value,
-                      },
-                    })
-                  }
-                  required
-                />
-              </div>
-
-              <div className="form-group">
-                <label className="form-label">Ville *</label>
-                <input
-                  type="text"
-                  className="form-control"
-                  value={formData.localisation.ville}
-                  onChange={(e) =>
-                    setFormData({
-                      ...formData,
-                      localisation: {
-                        ...formData.localisation,
-                        ville: e.target.value,
-                      },
-                    })
-                  }
-                  required
-                />
-              </div>
-
-              <div className="form-group">
-                <label className="form-label">Code postal *</label>
-                <input
-                  type="text"
-                  className="form-control"
-                  value={formData.localisation.codePostal}
-                  onChange={(e) =>
-                    setFormData({
-                      ...formData,
-                      localisation: {
-                        ...formData.localisation,
-                        codePostal: e.target.value,
-                      },
-                    })
-                  }
-                  required
-                />
-              </div>
-            </div>
-
             <div className="form-group">
               <label className="form-label">
-                📍 Cliquez sur la carte pour sélectionner la localisation *
+                Cliquez sur la carte pour sélectionner l'emplacement exact *
               </label>
               <GoogleMapComponent
                 center={selectedLocation || mapCenter}
                 zoom={selectedLocation ? 15 : 12}
                 height="400px"
                 clickable={true}
-                onLocationSelect={(location) => {
-                  setSelectedLocation(location);
-                  toast.success(`Localisation sélectionnée`);
-                }}
+                onLocationSelect={handleLocationSelect}
               />
               {selectedLocation ? (
                 <div className="alert alert-success mt-2">
-                  ✓ Localisation sélectionnée: {selectedLocation.lat.toFixed(6)}
-                  , {selectedLocation.lng.toFixed(6)}
+                  <strong>✓ Localisation sélectionnée</strong>
+                  <p style={{ margin: "10px 0 0 0" }}>
+                    📍{" "}
+                    {formData.localisation.adresse ||
+                      "Chargement de l'adresse..."}
+                  </p>
                   <button
                     type="button"
-                    onClick={() => setSelectedLocation(null)}
+                    onClick={() => {
+                      setSelectedLocation(null);
+                      setFormData((prev) => ({
+                        ...prev,
+                        localisation: {
+                          adresse: "",
+                          ville: "",
+                          codePostal: "",
+                        },
+                      }));
+                    }}
                     className="btn btn-danger"
                     style={{
-                      marginLeft: "10px",
+                      marginTop: "10px",
                       padding: "5px 10px",
                       fontSize: "0.8rem",
                     }}
@@ -413,7 +479,7 @@ const OwnerDashboard = () => {
               ) : (
                 <div className="alert alert-info mt-2">
                   💡 Cliquez sur la carte pour sélectionner l'emplacement de
-                  votre salle
+                  votre salle. L'adresse sera automatiquement détectée.
                 </div>
               )}
             </div>
@@ -531,98 +597,325 @@ const OwnerDashboard = () => {
         </div>
       )}
 
-      <div className="grid grid-3">
-        {rooms.map((room) => (
-          <div key={room._id} className="card">
-            {room.images && room.images.length > 0 ? (
-              <img
-                src={room.images[0]}
-                alt={room.titre}
-                className="card-image"
-                onError={(e) => {
-                  e.target.src =
-                    "https://via.placeholder.com/400x200?text=Image+non+disponible";
-                }}
-              />
-            ) : (
-              <div
-                className="card-image"
-                style={{
-                  background:
-                    "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  color: "white",
-                  fontSize: "3rem",
-                }}
-              >
-                🏢
-              </div>
-            )}
-
+      {/* Modal des réservations */}
+      {selectedRoomBookings && (
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: "rgba(0, 0, 0, 0.7)",
+            zIndex: 9999,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "20px",
+          }}
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setSelectedRoomBookings(null);
+            }
+          }}
+        >
+          <div
+            className="card"
+            style={{
+              maxWidth: "800px",
+              width: "100%",
+              maxHeight: "80vh",
+              overflow: "auto",
+            }}
+          >
             <div
               style={{
                 display: "flex",
                 justifyContent: "space-between",
-                alignItems: "start",
-                marginBottom: "10px",
+                alignItems: "center",
               }}
             >
-              <h3 style={{ margin: 0 }}>{room.titre}</h3>
-              {getStatusBadge(room)}
-            </div>
-
-            <p
-              style={{
-                color: "var(--gray)",
-                height: "60px",
-                overflow: "hidden",
-              }}
-            >
-              {room.description}
-            </p>
-
-            <div
-              style={{
-                display: "flex",
-                gap: "10px",
-                marginBottom: "15px",
-                flexWrap: "wrap",
-              }}
-            >
-              <span className="badge badge-primary">👥 {room.capacite}</span>
-              <span className="badge badge-success">
-                {room.prix}€/{room.typePrix}
-              </span>
-              {room.noteMoyenne > 0 && (
-                <span className="badge badge-warning">
-                  ⭐ {room.noteMoyenne.toFixed(1)}
-                </span>
-              )}
-              {room.images && room.images.length > 0 && (
-                <span className="badge badge-primary">
-                  📸 {room.images.length}
-                </span>
-              )}
-            </div>
-
-            <div className="grid grid-2" style={{ gap: "10px" }}>
+              <h2>Réservations - {selectedRoomBookings.roomTitle}</h2>
               <button
-                onClick={() => handleEdit(room)}
-                className="btn btn-primary"
+                onClick={() => setSelectedRoomBookings(null)}
+                style={{
+                  background: "none",
+                  border: "none",
+                  fontSize: "1.5rem",
+                  cursor: "pointer",
+                }}
               >
-                ✏️ Modifier
-              </button>
-              <button
-                onClick={() => handleDelete(room._id)}
-                className="btn btn-danger"
-              >
-                🗑️ Supprimer
+                ✕
               </button>
             </div>
+
+            {selectedRoomBookings.bookings.length === 0 ? (
+              <p className="mt-3">Aucune réservation pour cette salle</p>
+            ) : (
+              <div style={{ marginTop: "20px" }}>
+                {selectedRoomBookings.bookings.map((booking) => (
+                  <div
+                    key={booking._id}
+                    style={{
+                      padding: "15px",
+                      background: "var(--light)",
+                      borderRadius: "8px",
+                      marginBottom: "15px",
+                      border:
+                        booking.statut === "en_attente"
+                          ? "2px solid var(--warning)"
+                          : "1px solid var(--border)",
+                    }}
+                  >
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "start",
+                      }}
+                    >
+                      <div>
+                        <strong>
+                          {booking.client.prenom} {booking.client.nom}
+                        </strong>
+                        <p
+                          style={{
+                            color: "var(--gray)",
+                            fontSize: "0.9rem",
+                            margin: "5px 0",
+                          }}
+                        >
+                          📧 {booking.client.email}
+                          {booking.client.telephone && (
+                            <>
+                              <br />
+                              📞 {booking.client.telephone}
+                            </>
+                          )}
+                        </p>
+                      </div>
+                      <span
+                        className={`badge ${getBookingStatusBadge(booking.statut)}`}
+                      >
+                        {getBookingStatusText(booking.statut)}
+                      </span>
+                    </div>
+
+                    <div
+                      style={{
+                        marginTop: "10px",
+                        padding: "10px",
+                        background: "white",
+                        borderRadius: "5px",
+                      }}
+                    >
+                      <p>
+                        <strong>📅 Du:</strong> {formatDate(booking.dateDebut)}
+                      </p>
+                      <p>
+                        <strong>📅 Au:</strong> {formatDate(booking.dateFin)}
+                      </p>
+                      <p>
+                        <strong>👥 Personnes:</strong> {booking.nombrePersonnes}
+                      </p>
+                      <p>
+                        <strong>💰 Prix:</strong> {booking.prixTotal}€
+                      </p>
+                    </div>
+
+                    {booking.statut === "en_attente" && (
+                      <div
+                        className="grid grid-2"
+                        style={{ gap: "10px", marginTop: "10px" }}
+                      >
+                        <button
+                          onClick={() => handleApproveBooking(booking._id)}
+                          className="btn btn-success"
+                        >
+                          ✅ Approuver
+                        </button>
+                        <button
+                          onClick={() => handleRefuseBooking(booking._id)}
+                          className="btn btn-danger"
+                        >
+                          ❌ Refuser
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
-        ))}
+        </div>
+      )}
+
+      <div className="grid grid-3">
+        {rooms.map((room) => {
+          const pendingCount = getPendingBookingsCount(room._id);
+          const roomBookings = getRoomBookings(room._id);
+
+          return (
+            <div
+              key={room._id}
+              className="card"
+              style={{ position: "relative" }}
+            >
+              {/* Badge de notification */}
+              {pendingCount > 0 && (
+                <div
+                  style={{
+                    position: "absolute",
+                    top: "10px",
+                    right: "10px",
+                    background: "#ef4444",
+                    color: "white",
+                    borderRadius: "50%",
+                    width: "40px",
+                    height: "40px",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    fontWeight: "bold",
+                    fontSize: "1.2rem",
+                    zIndex: 10,
+                    boxShadow: "0 2px 8px rgba(0,0,0,0.3)",
+                    cursor: "pointer",
+                  }}
+                  onClick={() =>
+                    setSelectedRoomBookings({
+                      roomId: room._id,
+                      roomTitle: room.titre,
+                      bookings: roomBookings,
+                    })
+                  }
+                  title={`${pendingCount} demande(s) en attente`}
+                >
+                  {pendingCount}
+                </div>
+              )}
+
+              {room.images && room.images.length > 0 ? (
+                <img
+                  src={room.images[0]}
+                  alt={room.titre}
+                  className="card-image"
+                  onError={(e) => {
+                    e.target.src =
+                      "https://via.placeholder.com/400x200?text=Image+non+disponible";
+                  }}
+                  onClick={() =>
+                    setSelectedRoomBookings({
+                      roomId: room._id,
+                      roomTitle: room.titre,
+                      bookings: roomBookings,
+                    })
+                  }
+                  style={{ cursor: "pointer" }}
+                />
+              ) : (
+                <div
+                  className="card-image"
+                  style={{
+                    background:
+                      "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    color: "white",
+                    fontSize: "3rem",
+                    cursor: "pointer",
+                  }}
+                  onClick={() =>
+                    setSelectedRoomBookings({
+                      roomId: room._id,
+                      roomTitle: room.titre,
+                      bookings: roomBookings,
+                    })
+                  }
+                >
+                  🏢
+                </div>
+              )}
+
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "start",
+                  marginBottom: "10px",
+                }}
+              >
+                <h3 style={{ margin: 0 }}>{room.titre}</h3>
+                {getStatusBadge(room)}
+              </div>
+
+              <p
+                style={{
+                  color: "var(--gray)",
+                  height: "60px",
+                  overflow: "hidden",
+                }}
+              >
+                {room.description}
+              </p>
+
+              <div
+                style={{
+                  display: "flex",
+                  gap: "10px",
+                  marginBottom: "15px",
+                  flexWrap: "wrap",
+                }}
+              >
+                <span className="badge badge-primary">👥 {room.capacite}</span>
+                <span className="badge badge-success">
+                  {room.prix}€/{room.typePrix}
+                </span>
+                {room.noteMoyenne > 0 && (
+                  <span className="badge badge-warning">
+                    ⭐ {room.noteMoyenne.toFixed(1)}
+                  </span>
+                )}
+                {room.images && room.images.length > 0 && (
+                  <span className="badge badge-primary">
+                    📸 {room.images.length}
+                  </span>
+                )}
+                {roomBookings.length > 0 && (
+                  <span
+                    className="badge badge-primary"
+                    style={{ cursor: "pointer" }}
+                    onClick={() =>
+                      setSelectedRoomBookings({
+                        roomId: room._id,
+                        roomTitle: room.titre,
+                        bookings: roomBookings,
+                      })
+                    }
+                  >
+                    📅 {roomBookings.length} réservation(s)
+                  </span>
+                )}
+              </div>
+
+              <div className="grid grid-2" style={{ gap: "10px" }}>
+                <button
+                  onClick={() => handleEdit(room)}
+                  className="btn btn-primary"
+                >
+                  ✏️ Modifier
+                </button>
+                <button
+                  onClick={() => handleDelete(room._id)}
+                  className="btn btn-danger"
+                >
+                  🗑️ Supprimer
+                </button>
+              </div>
+            </div>
+          );
+        })}
       </div>
 
       {rooms.length === 0 && !showForm && (

@@ -298,6 +298,9 @@ const AdminDashboard = () => {
                     {room.proprietaire.nom}
                     <br />
                     <strong>Email:</strong> {room.proprietaire.email}
+                    <br />
+                    <strong>Localisation:</strong> {room.localisation.ville},{" "}
+                    {room.localisation.codePostal}
                   </div>
 
                   <div
@@ -321,7 +324,16 @@ const AdminDashboard = () => {
                     )}
                   </div>
 
-                  <div className="grid grid-2" style={{ gap: "10px" }}>
+                  <div className="grid grid-3" style={{ gap: "10px" }}>
+                    <a
+                      href={`/room/${room._id}`}
+                      className="btn btn-primary"
+                      style={{ textAlign: "center", textDecoration: "none" }}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      👁️ Voir
+                    </a>
                     <button
                       onClick={() => approveRoom(room._id)}
                       className="btn btn-success"

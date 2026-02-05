@@ -42,6 +42,7 @@ const MyBookings = () => {
       en_attente: "badge-warning",
       annulee: "badge-danger",
       terminee: "badge-primary",
+      refusee: "badge-danger",
     };
     return badges[status] || "badge-primary";
   };
@@ -49,9 +50,10 @@ const MyBookings = () => {
   const getStatusText = (status) => {
     const texts = {
       confirmee: "Confirmée",
-      en_attente: "En attente",
+      en_attente: "En attente d'approbation",
       annulee: "Annulée",
       terminee: "Terminée",
+      refusee: "Refusée par le propriétaire",
     };
     return texts[status] || status;
   };
@@ -144,7 +146,7 @@ const MyBookings = () => {
                     <span className={`badge ${getStatusBadge(booking.statut)}`}>
                       {getStatusText(booking.statut)}
                     </span>
-                    {isFinished && (
+                    {isFinished && booking.statut === "confirmee" && (
                       <span
                         className="badge badge-primary"
                         style={{ fontSize: "0.75rem" }}
@@ -177,6 +179,46 @@ const MyBookings = () => {
                   </p>
                 </div>
 
+                {/* Messages selon le statut */}
+                {booking.statut === "en_attente" && (
+                  <div
+                    className="alert alert-warning"
+                    style={{ marginBottom: "15px" }}
+                  >
+                    ⏳ Votre demande est en attente d'approbation par le
+                    propriétaire
+                  </div>
+                )}
+
+                {booking.statut === "refusee" && (
+                  <div
+                    className="alert alert-danger"
+                    style={{ marginBottom: "15px" }}
+                  >
+                    ❌ Cette réservation a été refusée par le propriétaire
+                  </div>
+                )}
+
+                {booking.statut === "confirmee" && !isFinished && (
+                  <div
+                    className="alert alert-success"
+                    style={{ marginBottom: "15px" }}
+                  >
+                    ✅ Réservation confirmée ! Vous pouvez y accéder à la date
+                    prévue
+                  </div>
+                )}
+
+                {isFinished && booking.statut === "confirmee" && (
+                  <div
+                    className="alert alert-primary"
+                    style={{ marginBottom: "15px" }}
+                  >
+                    💬 Votre séjour est terminé ! N'oubliez pas de laisser un
+                    avis
+                  </div>
+                )}
+
                 <div className="grid grid-2" style={{ gap: "10px" }}>
                   <Link
                     to={`/booking/${booking._id}`}
@@ -185,14 +227,16 @@ const MyBookings = () => {
                   >
                     📋 Détails de la réservation
                   </Link>
-                  {booking.statut === "confirmee" && !isFinished && (
-                    <button
-                      onClick={() => handleCancel(booking._id)}
-                      className="btn btn-danger"
-                    >
-                      ❌ Annuler
-                    </button>
-                  )}
+                  {(booking.statut === "confirmee" ||
+                    booking.statut === "en_attente") &&
+                    !isFinished && (
+                      <button
+                        onClick={() => handleCancel(booking._id)}
+                        className="btn btn-danger"
+                      >
+                        ❌ Annuler
+                      </button>
+                    )}
                 </div>
               </div>
             );

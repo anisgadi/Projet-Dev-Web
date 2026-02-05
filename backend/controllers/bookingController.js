@@ -98,7 +98,7 @@ exports.createBooking = async (req, res, next) => {
       });
     }
 
-    // Vérifier les conflits de dates
+    // Vérifier les dates
     const debut = new Date(dateDebut);
     const fin = new Date(dateFin);
 
@@ -106,23 +106,6 @@ exports.createBooking = async (req, res, next) => {
       return res.status(400).json({
         success: false,
         message: "La date de fin doit être après la date de début",
-      });
-    }
-
-    const conflictingBookings = await Booking.find({
-      salle,
-      statut: { $in: ["en_attente", "confirmee"] },
-      $or: [
-        { dateDebut: { $lte: debut }, dateFin: { $gt: debut } },
-        { dateDebut: { $lt: fin }, dateFin: { $gte: fin } },
-        { dateDebut: { $gte: debut }, dateFin: { $lte: fin } },
-      ],
-    });
-
-    if (conflictingBookings.length > 0) {
-      return res.status(400).json({
-        success: false,
-        message: "Cette salle est déjà réservée pour cette période",
       });
     }
 
@@ -141,7 +124,7 @@ exports.createBooking = async (req, res, next) => {
       prixTotal = Math.ceil(diffWeeks) * room.prix;
     }
 
-    // Créer la réservation
+    // Créer la réservation avec statut "en_attente"
     const booking = await Booking.create({
       salle,
       client: req.user.id,
@@ -149,12 +132,97 @@ exports.createBooking = async (req, res, next) => {
       dateFin,
       nombrePersonnes,
       prixTotal,
-      statut: "confirmee",
+      statut: "en_attente",
     });
 
     res.status(201).json({
       success: true,
-      message: "Réservation créée avec succès",
+      message:
+        "Demande de réservation envoyée avec succès. En attente d'approbation du propriétaire.",
+      data: booking,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Approuver une réservation (Propriétaire)
+// @route   PUT /api/bookings/:id/approve
+// @access  Private (Propriétaire)
+exports.approveBooking = async (req, res, next) => {
+  try {
+    const booking = await Booking.findById(req.params.id).populate("salle");
+
+    if (!booking) {
+      return res.status(404).json({
+        success: false,
+        message: "Réservation non trouvée",
+      });
+    }
+
+    // Vérifier que c'est le propriétaire de la salle
+    if (booking.salle.proprietaire.toString() !== req.user.id) {
+      return res.status(403).json({
+        success: false,
+        message: "Non autorisé à approuver cette réservation",
+      });
+    }
+
+    if (booking.statut !== "en_attente") {
+      return res.status(400).json({
+        success: false,
+        message: "Cette réservation ne peut pas être approuvée",
+      });
+    }
+
+    booking.statut = "confirmee";
+    await booking.save();
+
+    res.status(200).json({
+      success: true,
+      message: "Réservation approuvée",
+      data: booking,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Refuser une réservation (Propriétaire)
+// @route   PUT /api/bookings/:id/refuse
+// @access  Private (Propriétaire)
+exports.refuseBooking = async (req, res, next) => {
+  try {
+    const booking = await Booking.findById(req.params.id).populate("salle");
+
+    if (!booking) {
+      return res.status(404).json({
+        success: false,
+        message: "Réservation non trouvée",
+      });
+    }
+
+    // Vérifier que c'est le propriétaire de la salle
+    if (booking.salle.proprietaire.toString() !== req.user.id) {
+      return res.status(403).json({
+        success: false,
+        message: "Non autorisé à refuser cette réservation",
+      });
+    }
+
+    if (booking.statut !== "en_attente") {
+      return res.status(400).json({
+        success: false,
+        message: "Cette réservation ne peut pas être refusée",
+      });
+    }
+
+    booking.statut = "refusee";
+    await booking.save();
+
+    res.status(200).json({
+      success: true,
+      message: "Réservation refusée",
       data: booking,
     });
   } catch (error) {

@@ -19,25 +19,26 @@ const bookingSchema = new mongoose.Schema(
     dateFin: {
       type: Date,
       required: [true, "La date de fin est requise"],
+      validate: {
+        validator: function (v) {
+          return v > this.dateDebut;
+        },
+        message: "La date de fin doit être après la date de début",
+      },
     },
     nombrePersonnes: {
       type: Number,
       required: [true, "Le nombre de personnes est requis"],
-      min: 1,
+      min: [1, "Le nombre de personnes doit être au moins 1"],
     },
     prixTotal: {
       type: Number,
       required: true,
-      min: 0,
     },
     statut: {
       type: String,
-      enum: ["en_attente", "confirmee", "annulee", "terminee"],
-      default: "confirmee",
-    },
-    notes: {
-      type: String,
-      maxlength: 500,
+      enum: ["en_attente", "confirmee", "annulee", "terminee", "refusee"],
+      default: "en_attente",
     },
     dateCreation: {
       type: Date,
@@ -49,16 +50,31 @@ const bookingSchema = new mongoose.Schema(
   },
 );
 
-// Vérifier que la date de fin est après la date de début
-bookingSchema.pre("save", function (next) {
-  if (this.dateFin <= this.dateDebut) {
-    next(new Error("La date de fin doit être après la date de début"));
+// Vérifier les conflits de dates avant la sauvegarde
+bookingSchema.pre("save", async function (next) {
+  if (this.isNew) {
+    const conflictingBookings = await this.constructor.find({
+      salle: this.salle,
+      _id: { $ne: this._id },
+      statut: { $in: ["en_attente", "confirmee"] },
+      $or: [
+        {
+          dateDebut: { $lte: this.dateDebut },
+          dateFin: { $gt: this.dateDebut },
+        },
+        { dateDebut: { $lt: this.dateFin }, dateFin: { $gte: this.dateFin } },
+        {
+          dateDebut: { $gte: this.dateDebut },
+          dateFin: { $lte: this.dateFin },
+        },
+      ],
+    });
+
+    if (conflictingBookings.length > 0) {
+      throw new Error("Cette salle est déjà réservée pour cette période");
+    }
   }
   next();
 });
-
-// Index pour optimiser les recherches
-bookingSchema.index({ salle: 1, dateDebut: 1, dateFin: 1 });
-bookingSchema.index({ client: 1, dateCreation: -1 });
 
 module.exports = mongoose.model("Booking", bookingSchema);

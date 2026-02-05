@@ -8,6 +8,8 @@ const {
   getMyBookings,
   getOwnerBookings,
   cancelBooking,
+  approveBooking,
+  refuseBooking,
 } = require("../controllers/bookingController");
 const { protect, authorize } = require("../middleware/auth");
 
@@ -23,6 +25,14 @@ router.route("/my-bookings").get(protect, authorize("client"), getMyBookings);
 router
   .route("/owner-bookings")
   .get(protect, authorize("proprietaire", "admin"), getOwnerBookings);
+
+router
+  .route("/:id/approve")
+  .put(protect, authorize("proprietaire", "admin"), approveBooking);
+
+router
+  .route("/:id/refuse")
+  .put(protect, authorize("proprietaire", "admin"), refuseBooking);
 
 router
   .route("/:id")
